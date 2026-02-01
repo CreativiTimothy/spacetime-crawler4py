@@ -6,6 +6,13 @@ from utils import get_logger
 import scraper
 import time
 
+"""
+Test small number of pages [Begin]
+"""
+# PAGE_COUNT = 0
+"""
+Test small number of pages [End]
+"""
 
 class Worker(Thread):
     def __init__(self, worker_id, config, frontier):
@@ -28,6 +35,16 @@ class Worker(Thread):
                 f"Downloaded {tbd_url}, status <{resp.status}>, "
                 f"using cache {self.config.cache_server}.")
             scraped_urls = scraper.scraper(tbd_url, resp)
+            """
+            Test small number of pages [Begin]
+            """
+            # global PAGE_COUNT
+            # PAGE_COUNT += 1
+            # if PAGE_COUNT > 5:
+            #     return None
+            """
+            Test small number of pages [End]
+            """
             for scraped_url in scraped_urls:
                 self.frontier.add_url(scraped_url)
             self.frontier.mark_url_complete(tbd_url)

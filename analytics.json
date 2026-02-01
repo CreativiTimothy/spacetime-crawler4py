@@ -1,0 +1,278 @@
+{
+  "longest_page": {
+    "url": "",
+    "word_count": 0
+  },
+  "top_words": [
+    [
+      "media",
+      78
+    ],
+    [
+      "support",
+      65
+    ],
+    [
+      "wiki",
+      63
+    ],
+    [
+      "tools",
+      63
+    ],
+    [
+      "png",
+      58
+    ],
+    [
+      "files",
+      51
+    ],
+    [
+      "commands",
+      50
+    ],
+    [
+      "page",
+      40
+    ],
+    [
+      "manager",
+      40
+    ],
+    [
+      "search",
+      37
+    ],
+    [
+      "projects",
+      36
+    ],
+    [
+      "revisions",
+      30
+    ],
+    [
+      "2021",
+      30
+    ],
+    [
+      "file",
+      30
+    ],
+    [
+      "kb",
+      29
+    ],
+    [
+      "14",
+      29
+    ],
+    [
+      "show",
+      28
+    ],
+    [
+      "history",
+      28
+    ],
+    [
+      "date",
+      26
+    ],
+    [
+      "perms1",
+      26
+    ],
+    [
+      "log",
+      25
+    ],
+    [
+      "upload",
+      25
+    ],
+    [
+      "sitemap",
+      23
+    ],
+    [
+      "name",
+      22
+    ],
+    [
+      "notice",
+      22
+    ],
+    [
+      "power",
+      22
+    ],
+    [
+      "shutdown",
+      22
+    ],
+    [
+      "rev",
+      22
+    ],
+    [
+      "0422021",
+      22
+    ],
+    [
+      "old",
+      21
+    ],
+    [
+      "backlinks",
+      21
+    ],
+    [
+      "site",
+      21
+    ],
+    [
+      "recent",
+      21
+    ],
+    [
+      "changes",
+      21
+    ],
+    [
+      "user",
+      21
+    ],
+    [
+      "04",
+      21
+    ],
+    [
+      "namespaces",
+      20
+    ],
+    [
+      "accounts",
+      20
+    ],
+    [
+      "backups",
+      20
+    ],
+    [
+      "group",
+      20
+    ],
+    [
+      "hardware",
+      20
+    ],
+    [
+      "instructional",
+      20
+    ],
+    [
+      "requesttracker",
+      20
+    ],
+    [
+      "security",
+      20
+    ],
+    [
+      "services",
+      20
+    ],
+    [
+      "software",
+      20
+    ],
+    [
+      "virtual",
+      20
+    ],
+    [
+      "environments",
+      20
+    ],
+    [
+      "webapps",
+      20
+    ],
+    [
+      "02",
+      20
+    ]
+  ],
+  "subdomains": {
+    "wiki.ics.uci.edu": 21
+  },
+  "near_duplicates": [
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&do=media&tab_files=files&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?ns=commands&tab_files=files&do=media&tab_details=view&image=projects%3Anotice_power_shutdown_rev_0422021.png",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=history&do=media&tab_files=search&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=search&do=media&tab_details=history&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=view&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?ns=commands&tab_files=files&do=media&tab_details=view&image=projects%3Anotice_power_shutdown_rev_0422021.png",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=view&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&do=media&tab_files=files&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=history&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=history&do=media&tab_files=files&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=history&do=media&tab_files=upload&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=upload&do=media&tab_details=history&image=projects%3Anotice_power_shutdown_rev_0422021.png&ns=commands",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&ns=commands&image=commands%3Aperms1.png&do=media&tab_files=files",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?image=commands%3Aperms1.png&ns=commands&tab_details=view&do=media&tab_files=files",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&do=media&tab_files=files&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?image=commands%3Aperms1.png&ns=commands&tab_details=view&do=media&tab_files=files",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&do=media&tab_files=files&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&ns=commands&image=commands%3Aperms1.png&do=media&tab_files=files",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=history&do=media&tab_files=search&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=search&do=media&tab_details=history&image=commands%3Aperms1.png&ns=commands",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=view&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?image=commands%3Aperms1.png&ns=commands&tab_details=view&do=media&tab_files=files",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=view&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&ns=commands&image=commands%3Aperms1.png&do=media&tab_files=files",
+      "similarity": 1.0
+    },
+    {
+      "url1": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_files=files&do=media&tab_details=view&image=commands%3Aperms1.png&ns=commands",
+      "url2": "https://wiki.ics.uci.edu/doku.php/projects:maint-winter-2021?tab_details=view&do=media&tab_files=files&image=commands%3Aperms1.png&ns=commands",
+      "similarity": 1.0
+    }
+  ]
+}
