@@ -1,0 +1,9 @@
+#!/bin/sh
+'''exec' "/Users/creat/GDCreat/_School/2026_01 Winter/COMPSCI 121_Information Retrieval_Daye Nam/Assignment/Assignment2/spacetime-crawler4py/.conda/bin/python3.10" "$0" "$@"
+' '''
+import sys
+from charset_normalizer.cli import cli_detect
+if __name__ == '__main__':
+    if sys.argv[0].endswith('.exe'):
+        sys.argv[0] = sys.argv[0][:-4]
+    sys.exit(cli_detect())

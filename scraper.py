@@ -11,6 +11,8 @@ from collections import defaultdict
 from tokenizer import tokenize
 from utils.stopwords import load_stopwords
 
+from analytics_store import load_analytics, save_analytics
+
 from similarity_ngram import (
     make_ngrams,
     select_fingerprints,
@@ -31,9 +33,14 @@ ALLOWED_DOMAINS = {
 STOPWORDS = load_stopwords()
 
 # Global analytics
-WORD_COUNTS = defaultdict(int)
-LONGEST_PAGE = ("", 0) # (url, word_count)
-SUBDOMAIN_COUNTS = defaultdict(int)
+analytics = load_analytics()
+
+UNIQUE_PAGES = set(analytics["unique_pages"])
+WORD_COUNTS = defaultdict(int, analytics["word_counts"])
+LONGEST_PAGE = tuple(analytics["longest_page"])
+SUBDOMAIN_COUNTS = defaultdict(int, analytics["subdomains"])
+# FINGERPRINTS = {k: set(v) for k, v in analytics["fingerprints"].items()}
+# NEAR_DUPLICATES = analytics["near_duplicates"]
 
 # SIMHASHES = {}          # url -> fingerprint
 # NEAR_DUPLICATES = []    # (url1, url2, distance)
@@ -59,15 +66,42 @@ def scraper(url, resp):
         """
         tokens = tokenize(text, STOPWORDS)
 
-        # Update word frequencies
+        # Track unique pages
+        normalized_url, _ = urldefrag(url) # Normalize URL by removing fragment
+        UNIQUE_PAGES.add(normalized_url)
+
+        # -----------------------------
+        # Update Word Counts
+        # -----------------------------
         for t in tokens:
-            WORD_COUNTS[t] += 1
+            WORD_COUNTS[t] = WORD_COUNTS.get(t, 0) + 1
 
-        # Update longest page
+        # -----------------------------
+        # Update Longest Page
+        # -----------------------------
         global LONGEST_PAGE
-        if len(tokens) > LONGEST_PAGE[1]:
-            LONGEST_PAGE = (url, len(tokens))
+        token_count = len(tokens)
 
+        if token_count > LONGEST_PAGE[1]:
+            LONGEST_PAGE = (url, token_count)
+
+        # Update subdomain counts
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        if domain.endswith(".uci.edu"):
+            if domain.startswith("www."):
+                domain = domain[4:]
+            SUBDOMAIN_COUNTS[domain] += 1
+
+        # Save analytics incrementally
+        analytics["unique_pages"] = list(UNIQUE_PAGES)
+        analytics["word_counts"] = dict(WORD_COUNTS)
+        analytics["longest_page"] = list(LONGEST_PAGE)
+        analytics["subdomains"] = dict(SUBDOMAIN_COUNTS)
+        # analytics["fingerprints"] = {k: list(v) for k, v in FINGERPRINTS.items()}
+        # analytics["near_duplicates"] = NEAR_DUPLICATES
+
+        save_analytics(analytics)
         """
         N-gram Fingerprinting [Begin]
         """
@@ -112,12 +146,6 @@ def scraper(url, resp):
         """
         Tokenize, Word Analytics, Similarity Detection [End]
         """
-
-        # Update subdomain counts
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        if domain.endswith(".uci.edu"):
-            SUBDOMAIN_COUNTS[domain] += 1
 
     except Exception:
         pass
