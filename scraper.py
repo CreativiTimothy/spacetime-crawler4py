@@ -209,6 +209,12 @@ def is_redundant_trap_url(parsed): # Helper function
     qs = parse_qs(parsed.query, keep_blank_values=True)
 
     # -------------------------
+    # WICS / NGS avoid
+    # -------------------------
+    if "wics" in parsed.netloc or "ngs" in parsed.netloc:
+        return True
+
+    # -------------------------
     # DokuWiki
     # -------------------------
     if "doku.php" in path:
@@ -270,20 +276,30 @@ def is_valid(url):
     try:
         parsed = urlparse(url)
 
-        # Must be HTTP or HTTPS
         if parsed.scheme not in {"http", "https"}:
             return False
-            
+
+        domain = parsed.netloc.lower()
+
+        # strip port if present
+        domain = domain.split(":", 1)[0]
+
+        # strip leading www.
+        if domain.startswith("www."):
+            domain = domain[4:]
+        
         # Intranet and gitlab blocks
         if domain == "intranet.ics.uci.edu":
             return False
-        
-        if domain.endswith("gitlab.ics.uci.edu"):
+
+        if domain == "gitlab.ics.uci.edu" or domain.endswith(".gitlab.ics.uci.edu"):
             return False
-            
-        # Must be inside allowed domains
-        domain = parsed.netloc.lower()
-        if not any(domain.endswith(allowed) for allowed in ALLOWED_DOMAINS):
+
+        # Domain boundary check
+        def allowed_domain(domain: str) -> bool:
+            return any(domain == a or domain.endswith("." + a) for a in ALLOWED_DOMAINS)
+
+        if not allowed_domain(domain):
             return False
 
         if is_redundant_trap_url(parsed):
@@ -345,4 +361,5 @@ def is_valid(url):
 
     except TypeError:
         return False
+
 
