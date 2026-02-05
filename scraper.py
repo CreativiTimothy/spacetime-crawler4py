@@ -4,6 +4,7 @@ and then manually edited to fit assignment specifications.
 """
 
 import re
+import logging
 from urllib.parse import urlparse, urljoin, urldefrag
 from bs4 import BeautifulSoup
 
@@ -31,6 +32,21 @@ ALLOWED_DOMAINS = {
 }
 
 STOPWORDS = load_stopwords()
+
+# Logging, can remove later
+logger = logging.getLogger("crawler")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    fh = logging.FileHandler("crawl_output.log", encoding="utf-8")
+    fh.setFormatter(fmt)
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+
+    logger.addHandler(fh)
+    logger.addHandler(sh)
 
 # Global analytics
 analytics = load_analytics()
@@ -187,6 +203,64 @@ def extract_next_links(url, resp):
 
     return output_links
 
+def is_redundant_trap_url(parsed): # Helper function
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+
+    # -------------------------
+    # DokuWiki
+    # -------------------------
+    if "doku.php" in path:
+        if not qs:
+            return False
+        if set(k.lower() for k in qs.keys()) <= {"id"}:
+            return False
+        return True
+
+    # -------------------------
+    # MediaWiki
+    # -------------------------
+    if path.endswith("index.php") and "title=" in query:
+        allowed = {"title", "oldid"}
+        if set(k.lower() for k in qs.keys()) <= allowed:
+            return False
+        return True
+
+    # -------------------------
+    # Trac Wiki
+    # -------------------------
+    if "/wiki" in path:
+        bad = {"version", "format", "action", "from", "precision", "diff"}
+        if any(k.lower() in bad for k in qs.keys()):
+            return True
+
+    # -------------------------
+    # Timeline traps
+    # -------------------------
+    if "timeline" in path and "from=" in query:
+        return True
+
+    # -------------------------
+    # UI parameter explosion
+    # -------------------------
+    generic_bad = (
+        "tab=",
+        "sort=",
+        "order=",
+        "filter=",
+        "replytocom=",
+        "share=",
+        "print="
+    )
+
+    if any(k in query for k in generic_bad) and query.count("&") >= 3:
+        return True
+
+    if len(query) > 200:
+        return True
+
+    return False
 
 def is_valid(url):
     """
@@ -199,11 +273,25 @@ def is_valid(url):
         # Must be HTTP or HTTPS
         if parsed.scheme not in {"http", "https"}:
             return False
-
+            
+        # Intranet and gitlab blocks
+        if domain == "intranet.ics.uci.edu":
+            return False
+        
+        if domain.endswith("gitlab.ics.uci.edu"):
+            return False
+            
         # Must be inside allowed domains
         domain = parsed.netloc.lower()
         if not any(domain.endswith(allowed) for allowed in ALLOWED_DOMAINS):
             return False
+
+        if is_redundant_trap_url(parsed):
+            return False
+
+        path = parsed.path.lower()
+        query = parsed.query.lower()
+        q = parse_qs(parsed.query)
 
         # Avoid file extensions (given by assignment)
         if re.match(
@@ -223,19 +311,38 @@ def is_valid(url):
         # Additional trap avoidance
         # -------------------------
 
-        # Avoid calendar traps
-        if "calendar" in parsed.path.lower():
+        # WordPress libraries
+        if "/wp-content/" in path:
             return False
 
-        # Avoid infinite pagination patterns
-        if re.search(r"(\?page=\d+|\&page=\d+)", url.lower()):
+        # Calendar detection
+        if any(x in path for x in ["/events", "/calendar"]):
             return False
 
-        # Avoid repeating directories like /2020/01/01/...
-        if parsed.path.count("/") > 10:
+        if any(x in query for x in ["ical", "outlook"]):
+            return False
+
+        # Date archives 
+        if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
+            return False
+
+        if "paged" in q and any(v.isdigit() and int(v) >= 100 for v in q.get("paged", [])):
+            return False
+
+        # Query explosion
+        if len(query) > 120 or query.count("&") > 6:
+            return False
+
+        # Deep pagination
+        if re.search(r"(page|start)=\d{3,}", query):
+            return False
+
+        # Deep path 
+        if path.count("/") > 10:
             return False
 
         return True
 
     except TypeError:
         return False
+
