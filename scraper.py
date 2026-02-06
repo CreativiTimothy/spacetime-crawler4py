@@ -4,13 +4,15 @@ and then manually edited to fit assignment specifications.
 """
 
 import re
-from urllib.parse import urlparse, urljoin, urldefrag
+import logging
+import threading
+from collections import defaultdict
+from urllib.parse import urlparse, urljoin, urldefrag, parse_qs
+
 from bs4 import BeautifulSoup
 
-from collections import defaultdict
 from tokenizer import tokenize
 from utils.stopwords import load_stopwords
-
 from analytics_store import load_analytics, save_analytics
 
 from similarity_ngram import (
@@ -21,8 +23,6 @@ from similarity_ngram import (
     NEAR_DUPLICATES
 )
 
-# from simhash import simhash, hamming_distance
-
 ALLOWED_DOMAINS = {
     "ics.uci.edu",
     "cs.uci.edu",
@@ -32,125 +32,133 @@ ALLOWED_DOMAINS = {
 
 STOPWORDS = load_stopwords()
 
-# Global analytics
+# -----------------------------
+# Logging
+# -----------------------------
+logger = logging.getLogger("crawler")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    fh = logging.FileHandler("crawl_output.log", encoding="utf-8")
+    fh.setFormatter(fmt)
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+
+    logger.addHandler(fh)
+    logger.addHandler(sh)
+
+# -----------------------------
+# Analytics (shared state)
+# -----------------------------
 analytics = load_analytics()
 
-UNIQUE_PAGES = set(analytics["unique_pages"])
-WORD_COUNTS = defaultdict(int, analytics["word_counts"])
-LONGEST_PAGE = tuple(analytics["longest_page"])
-SUBDOMAIN_COUNTS = defaultdict(int, analytics["subdomains"])
+UNIQUE_PAGES = set(analytics.get("unique_pages", []))
+WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {}))
+LONGEST_PAGE = tuple(analytics.get("longest_page", ["", 0]))
+SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {}))
 # FINGERPRINTS = {k: set(v) for k, v in analytics["fingerprints"].items()}
-# NEAR_DUPLICATES = analytics["near_duplicates"]
+NEAR_DUPLICATES = analytics.get("near_duplicates", [])
 
-# SIMHASHES = {}          # url -> fingerprint
-# NEAR_DUPLICATES = []    # (url1, url2, distance)
+# Thread-safety for all shared analytics/similarity state
+ANALYTICS_LOCK = threading.Lock()
 
+# ============================================================
+# SCRAPER
+# ============================================================
 def scraper(url, resp):
-    """
-    Scrape URLs
-    """
 
     if resp.status != 200 or resp.raw_response is None:
         return []
 
-    # Extract links
+    if not is_valid(url):
+        logger.info(f"Skip invalid URL (trap): {url}")
+        return []
+
+    logger.info(f"Processing: {url}")
+
+    try:
+        content_type = resp.raw_response.headers.get("Content-Type", "").lower()
+    except Exception:
+        content_type = ""
+
+    if "text/html" not in content_type:
+        logger.info(f"Skip non-HTML ({content_type}): {url}")
+        return []
+
     links = extract_next_links(url, resp)
 
-    # Extract text for analytics
     try:
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
         text = soup.get_text(separator=" ")
 
-        """
-        Tokenize, Word Analytics, Similarity Detection [Begin]
-        """
         tokens = tokenize(text, STOPWORDS)
 
-        # Track unique pages
-        normalized_url, _ = urldefrag(url) # Normalize URL by removing fragment
-        UNIQUE_PAGES.add(normalized_url)
+        normalized_url, _ = urldefrag(url)
 
-        # -----------------------------
-        # Update Word Counts
-        # -----------------------------
-        for t in tokens:
-            WORD_COUNTS[t] = WORD_COUNTS.get(t, 0) + 1
+        with ANALYTICS_LOCK:
+            # -----------------------------
+            # Unique pages
+            # -----------------------------
+            is_new = normalized_url not in UNIQUE_PAGES
+            if is_new:
+                UNIQUE_PAGES.add(normalized_url)
+                logger.info(f"New unique page ({len(UNIQUE_PAGES)}): {normalized_url}")
 
-        # -----------------------------
-        # Update Longest Page
-        # -----------------------------
-        global LONGEST_PAGE
-        token_count = len(tokens)
+            # -----------------------------
+            # Word counts
+            # -----------------------------
+            for t in tokens:
+                WORD_COUNTS[t] += 1
 
-        if token_count > LONGEST_PAGE[1]:
-            LONGEST_PAGE = (url, token_count)
+            # -----------------------------
+            # Longest page
+            # -----------------------------
+            global LONGEST_PAGE
+            if len(tokens) > LONGEST_PAGE[1]:
+                LONGEST_PAGE = (normalized_url, len(tokens))
+                logger.info(f"New longest page: {normalized_url}")
 
-        # Update subdomain counts
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        if domain.endswith(".uci.edu"):
-            if domain.startswith("www."):
-                domain = domain[4:]
-            SUBDOMAIN_COUNTS[domain] += 1
+            # -----------------------------
+            # Subdomain counts
+            # -----------------------------
+            if is_new:
+                domain = urlparse(normalized_url).netloc.lower()
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                if domain.endswith(".uci.edu"):
+                    SUBDOMAIN_COUNTS[domain] += 1
 
-        # Save analytics incrementally
-        analytics["unique_pages"] = list(UNIQUE_PAGES)
-        analytics["word_counts"] = dict(WORD_COUNTS)
-        analytics["longest_page"] = list(LONGEST_PAGE)
-        analytics["subdomains"] = dict(SUBDOMAIN_COUNTS)
-        # analytics["fingerprints"] = {k: list(v) for k, v in FINGERPRINTS.items()}
-        # analytics["near_duplicates"] = NEAR_DUPLICATES
+            # -----------------------------
+            # Extra Credit Similarity (n-gram fingerprinting)
+            # -----------------------------
+            ngrams = make_ngrams(tokens)
+            fingerprints = select_fingerprints(ngrams)
+            FINGERPRINTS[normalized_url] = fingerprints
 
-        save_analytics(analytics)
-        """
-        N-gram Fingerprinting [Begin]
-        """
-        # -----------------------------
-        # N-gram fingerprinting
-        # -----------------------------
-        ngrams = make_ngrams(tokens)
-        fingerprints = select_fingerprints(ngrams)
-        FINGERPRINTS[url] = fingerprints
+            for other_url, other_fp in FINGERPRINTS.items():
+                if other_url == normalized_url:
+                    continue
+                sim = jaccard_similarity(fingerprints, other_fp)
+                if sim > 0.90:
+                    NEAR_DUPLICATES.append((normalized_url, other_url, sim))
 
-        # Compare with previous pages
-        for other_url, other_fp in FINGERPRINTS.items():
-            if other_url == url:
-                continue
+            # -----------------------------
+            # Persist analytics
+            # -----------------------------
+            analytics["unique_pages"] = list(UNIQUE_PAGES)
+            analytics["word_counts"] = dict(WORD_COUNTS)
+            analytics["longest_page"] = list(LONGEST_PAGE)
+            analytics["subdomains"] = dict(SUBDOMAIN_COUNTS)
+            # analytics["fingerprints"] = {k: list(v) for k, v in FINGERPRINTS.items()}
+            analytics["near_duplicates"] = NEAR_DUPLICATES
 
-            sim = jaccard_similarity(fingerprints, other_fp)
+            save_analytics(analytics)
 
-            # Threshold: textbook suggests ~90% overlap for near-duplicates
-            if sim > 0.90:
-                NEAR_DUPLICATES.append((url, other_url, sim))
-        """
-        N-gram Fingerprinting [End]
-        """
+    except Exception as e:
+        logger.info(f"Error analyzing {url}: {e}")
 
-        """
-        SimHash [Begin]
-        """
-        # # Compute SimHash
-        # fp = simhash(tokens)
-        # SIMHASHES[url] = fp
-        #
-        # # Compare with previous pages
-        # for other_url, other_fp in SIMHASHES.items():
-        #     if other_url == url:
-        #         continue
-        #     dist = hamming_distance(fp, other_fp)
-        #     if dist < 5: # threshold: <5 bits difference
-        #         NEAR_DUPLICATES.append((url, other_url, dist))
-        """
-        SimHash [End]
-        """
-        """
-        Tokenize, Word Analytics, Similarity Detection [End]
-        """
-
-    except Exception:
-        pass
-
-    # Return only valid links
     cleaned = []
     for link in links:
         link, _ = urldefrag(link)
@@ -159,80 +167,166 @@ def scraper(url, resp):
 
     return cleaned
 
+
+# ============================================================
+# LINK EXTRACTION
+# ============================================================
 def extract_next_links(url, resp):
-    """
-    Extracts all hyperlinks from the HTML content of the page.
-    Returns a list of absolute URLs as strings.
-    """
     output_links = []
 
     try:
-        content = resp.raw_response.content
-        soup = BeautifulSoup(content, "html.parser")
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
 
         for tag in soup.find_all("a", href=True):
             href = tag.get("href")
-
-            # Convert relative → absolute
             abs_url = urljoin(url, href)
-
-            # Remove fragment (#)
             abs_url, _ = urldefrag(abs_url)
-
             output_links.append(abs_url)
 
-    except Exception as e:
-        # If parsing fails, return empty list
-        return []
+    except Exception:
+        pass
 
     return output_links
 
 
+# ============================================================
+# TRAP DETECTION
+# ============================================================
+def is_redundant_trap_url(parsed):
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+
+    # WICS / NGS traps
+    if "wics" in parsed.netloc or "ngs" in parsed.netloc:
+        return True
+
+    # DokuWiki
+    if "doku.php" in path:
+        if not qs:
+            return False
+        if set(k.lower() for k in qs.keys()) <= {"id"}:
+            return False
+        return True
+
+    # MediaWiki
+    if path.endswith("index.php") and "title=" in query:
+        allowed = {"title", "oldid"}
+        if set(k.lower() for k in qs.keys()) <= allowed:
+            return False
+        return True
+
+    # Trac Wiki
+    if "/wiki" in path:
+        bad = {"version", "format", "action", "from", "precision", "diff"}
+        if any(k.lower() in bad for k in qs.keys()):
+            return True
+
+    # Timeline traps
+    if "timeline" in path and "from=" in query:
+        return True
+
+    # UI parameter explosion
+    generic_bad = (
+        "tab=",
+        "sort=",
+        "order=",
+        "filter=",
+        "replytocom=",
+        "share=",
+        "print="
+    )
+
+    if any(k in query for k in generic_bad) and query.count("&") >= 3:
+        return True
+
+    if len(query) > 200:
+        return True
+
+    return False
+
+
+# ============================================================
+# URL VALIDATION
+# ============================================================
 def is_valid(url):
-    """
-    Decide whether to crawl this URL.
-    Must stay within allowed domains and avoid traps.
-    """
     try:
         parsed = urlparse(url)
 
-        # Must be HTTP or HTTPS
         if parsed.scheme not in {"http", "https"}:
             return False
 
-        # Must be inside allowed domains
         domain = parsed.netloc.lower()
-        if not any(domain.endswith(allowed) for allowed in ALLOWED_DOMAINS):
+
+        # strip port if present
+        domain = domain.split(":", 1)[0]
+
+        # strip leading www.
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        # Intranet and gitlab blocks (hardcoded)
+        if domain == "intranet.ics.uci.edu":
             return False
 
-        # Avoid file extensions (given by assignment)
+        if domain == "gitlab.ics.uci.edu" or domain.endswith(".gitlab.ics.uci.edu"):
+            return False
+
+        # Domain boundary check
+        def allowed_domain(d: str) -> bool:
+            return any(d == a or d.endswith("." + a) for a in ALLOWED_DOMAINS)
+
+        if not allowed_domain(domain):
+            return False
+
+        # Hardcoded: ~eppstein/pix
+        if parsed.path.startswith("/~eppstein/pix"):
+            return False
+
+        if is_redundant_trap_url(parsed):
+            return False
+
+        path = parsed.path.lower()
+        query = parsed.query.lower()
+        q = parse_qs(parsed.query)
+
+        # File extensions
         if re.match(
-                r".*\.(css|js|bmp|gif|jpe?g|ico"
-                + r"|png|tiff?|mid|mp2|mp3|mp4"
-                + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-                + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-                + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-                + r"|epub|dll|cnf|tgz|sha1"
-                + r"|thmx|mso|arff|rtf|jar|csv"
-                + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$",
-                parsed.path.lower()
+            r".*\.(css|js|bmp|gif|jpe?g|ico|png|tiff?"
+            + r"|mp3|mp4|avi|mov|mpeg|pdf|docx?|xlsx?|pptx?"
+            + r"|zip|rar|gz|tar|7z|exe)$",
+            path
         ):
             return False
 
-        # -------------------------
-        # Additional trap avoidance
-        # -------------------------
-
-        # Avoid calendar traps
-        if "calendar" in parsed.path.lower():
+        # WordPress libraries
+        if "/wp-content/" in path:
             return False
 
-        # Avoid infinite pagination patterns
-        if re.search(r"(\?page=\d+|\&page=\d+)", url.lower()):
+        # Calendar detection
+        if any(x in path for x in ["/events", "/calendar"]):
             return False
 
-        # Avoid repeating directories like /2020/01/01/...
-        if parsed.path.count("/") > 10:
+        if any(x in query for x in ["ical", "outlook"]):
+            return False
+
+        # Date archives
+        if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
+            return False
+
+        if "paged" in q and any(v.isdigit() and int(v) >= 100 for v in q.get("paged", [])):
+            return False
+
+        # Query explosion
+        if len(query) > 120 or query.count("&") > 6:
+            return False
+
+        # Deep pagination
+        if re.search(r"(page|start)=\d{3,}", query):
+            return False
+
+        # Deep path
+        if path.count("/") > 10:
             return False
 
         return True
