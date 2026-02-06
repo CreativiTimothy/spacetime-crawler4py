@@ -13,8 +13,8 @@ import time
 # ============================================================
 # GLOBAL POLITENESS CONTROL
 # ============================================================
-POLITENESS_LOCK = Lock()
-LAST_REQUEST_TIME = 0.0
+POLITENESS_LOCK = Lock() # Prevents more than 1 thread from accessing.
+LAST_REQUEST_TIME = 0.0 # Keep track of last request (download) time.
 
 
 class Worker(Thread):
@@ -48,8 +48,8 @@ class Worker(Thread):
                 now = time.time()
                 elapsed = now - LAST_REQUEST_TIME
                 if elapsed < self.config.time_delay:
-                    time.sleep(self.config.time_delay - elapsed)
-                LAST_REQUEST_TIME = time.time()
+                    time.sleep(self.config.time_delay - elapsed) # Sleep until politeness delay. For example, if it's been 100ms, sleep for 400ms to reach 500ms politeness delay.
+                LAST_REQUEST_TIME = time.time() # Update last request time so next thread can check start time of next URL fetch and calculate elapsed time.
 
                 # Only ONE thread downloads at a time
                 resp = download(tbd_url, self.config, self.logger)

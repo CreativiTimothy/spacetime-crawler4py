@@ -19,7 +19,7 @@ class Frontier(object):
         # ============================================================
         # THREAD‑SAFETY LOCK
         # ============================================================
-        self.lock = RLock()
+        self.lock = RLock() # Prevents more than 1 thread from accessing. Use "RLock" over "Lock" to prevent deadlocking since multiple functions can lock the frontier.
 
         self.to_be_downloaded = list()
 
