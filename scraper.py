@@ -68,35 +68,44 @@ ANALYTICS_LOCK = threading.Lock()
 # SCRAPER
 # ============================================================
 def scraper(url, resp):
-
+    """Core scraping function called by crawler."""
+    
+    # Process successful HTTP responses
     if resp.status != 200 or resp.raw_response is None:
         return []
-
+    # Skip URLs that fail 
     if not is_valid(url):
         logger.info(f"Skip invalid URL (trap): {url}")
         return []
 
     logger.info(f"Processing: {url}")
-
+    
+     # Avoid non-HTML resources
     try:
         content_type = resp.raw_response.headers.get("Content-Type", "").lower()
     except Exception:
         content_type = ""
-
+        
+    # Skip PDFs, images, etc.
     if "text/html" not in content_type:
         logger.info(f"Skip non-HTML ({content_type}): {url}")
         return []
 
+    # Extract outgoing links from the page
     links = extract_next_links(url, resp)
 
     try:
+        # Parse page content and extract visible text
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
         text = soup.get_text(separator=" ")
 
+        # Tokenize text
         tokens = tokenize(text, STOPWORDS)
 
+        # Normalize by removing fragment
         normalized_url, _ = urldefrag(url)
 
+        # Update analytics
         with ANALYTICS_LOCK:
             # -----------------------------
             # Unique pages
@@ -159,12 +168,14 @@ def scraper(url, resp):
     except Exception as e:
         logger.info(f"Error analyzing {url}: {e}")
 
+    # Defragment and validate outgoing links
     cleaned = []
     for link in links:
         link, _ = urldefrag(link)
         if is_valid(link):
             cleaned.append(link)
 
+    # Return URLs to be added to the frontier
     return cleaned
 
 
@@ -172,15 +183,29 @@ def scraper(url, resp):
 # LINK EXTRACTION
 # ============================================================
 def extract_next_links(url, resp):
+    """
+    Extract all outgoing hyperlinks from an HTML page.
+    Converts relative links to absolute URLs and removes fragments.
+    Returns a list of URLs.
+    """
+    
     output_links = []
 
     try:
+        # Parse raw HTML content
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
 
+        # Find all anchor tags that contain an href attribute
         for tag in soup.find_all("a", href=True):
             href = tag.get("href")
+
+            # Convert relative URLs to absolute URLs
             abs_url = urljoin(url, href)
+            
+            # Remove fragment identifiers
             abs_url, _ = urldefrag(abs_url)
+
+            # Store extracted URL
             output_links.append(abs_url)
 
     except Exception:
@@ -333,3 +358,4 @@ def is_valid(url):
 
     except TypeError:
         return False
+
