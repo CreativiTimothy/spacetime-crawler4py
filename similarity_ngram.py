@@ -24,6 +24,7 @@ def make_ngrams(tokens, n=N_GRAM):
     """Generate overlapping n-grams from tokens."""
     grams = []
     for i in range(len(tokens) - n + 1):
+        # Find overlap by taking the token before and the token after 
         grams.append(" ".join(tokens[i:i+n]))
     return grams
 
@@ -48,3 +49,4 @@ def jaccard_similarity(set1, set2):
     inter = len(set1 & set2)
     union = len(set1 | set2)
     return inter / union
+
