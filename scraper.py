@@ -222,7 +222,7 @@ def is_redundant_trap_url(parsed):
     query = parsed.query.lower()
     qs = parse_qs(parsed.query, keep_blank_values=True)
 
-    # WICS / NGS traps
+    # WICS / NGS; WICS specifically leads to infinite calendar trap
     if "wics" in parsed.netloc or "ngs" in parsed.netloc:
         return True
 
@@ -241,8 +241,9 @@ def is_redundant_trap_url(parsed):
             return False
         return True
 
-    # Trac Wiki
+    # Trac Wiki: Overloads crawler with redundant URLs if path leads to...
     if "/wiki" in path:
+        # Set of all keywords that want to be avoided under domains with "/wiki"
         bad = {"version", "format", "action", "from", "precision", "diff"}
         if any(k.lower() in bad for k in qs.keys()):
             return True
@@ -251,7 +252,7 @@ def is_redundant_trap_url(parsed):
     if "timeline" in path and "from=" in query:
         return True
 
-    # UI parameter explosion
+    # Tuple of UI parameters
     generic_bad = (
         "tab=",
         "sort=",
@@ -262,12 +263,14 @@ def is_redundant_trap_url(parsed):
         "print="
     )
 
+    # If query contains any of the UI parameters and more than 3 ampersands, which separates parameters...
     if any(k in query for k in generic_bad) and query.count("&") >= 3:
         return True
-
+    
     if len(query) > 200:
         return True
 
+    # If none of the above trap detectors activate...
     return False
 
 
@@ -283,14 +286,14 @@ def is_valid(url):
 
         domain = parsed.netloc.lower()
 
-        # strip port if present
+        # Strips port if it is present
         domain = domain.split(":", 1)[0]
 
-        # strip leading www.
+        # Removes "www." subdomain
         if domain.startswith("www."):
             domain = domain[4:]
 
-        # Intranet and gitlab blocks (hardcoded)
+        # Hardcoded: Blocks domains with "intranet" and "gitlab"; Deemed irrelevant as it overloads sites with low information URLs & info
         if domain == "intranet.ics.uci.edu":
             return False
 
@@ -299,12 +302,13 @@ def is_valid(url):
 
         # Domain boundary check
         def allowed_domain(d: str) -> bool:
+            # Checks if domain is one of the 4 domains being looked for
             return any(d == a or d.endswith("." + a) for a in ALLOWED_DOMAINS)
 
         if not allowed_domain(domain):
             return False
 
-        # Hardcoded: ~eppstein/pix
+        # Hardcoded: ~eppstein/pix; Deemed irrelevant as it mostly contains photos
         if parsed.path.startswith("/~eppstein/pix"):
             return False
 
@@ -328,7 +332,7 @@ def is_valid(url):
         if "/wp-content/" in path:
             return False
 
-        # Calendar detection
+        # Calendar detection to avoid infinite loops
         if any(x in path for x in ["/events", "/calendar"]):
             return False
 
@@ -358,4 +362,5 @@ def is_valid(url):
 
     except TypeError:
         return False
+
 
