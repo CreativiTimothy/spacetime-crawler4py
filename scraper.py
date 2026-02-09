@@ -220,17 +220,17 @@ def extract_next_links(url, resp):
 def is_redundant_trap_url(parsed):
     path = parsed.path.lower()
     query = parsed.query.lower()
-    qs = parse_qs(parsed.query, keep_blank_values=True)
+    qs = parse_qs(parsed.query, keep_blank_values=True) # Stores a list of values from parsed URL, and ensures all parameters are preserved
 
-    # WICS / NGS; WICS specifically leads to infinite calendar trap
-    if "wics" in parsed.netloc or "ngs" in parsed.netloc:
+    # WICS / NGS; WICS specifically leads to an infinite calendar trap
+    if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL
         return True
 
     # DokuWiki
     if "doku.php" in path:
         if not qs:
             return False
-        if set(k.lower() for k in qs.keys()) <= {"id"}:
+        if set(k.lower() for k in qs.keys()) <= {"id"}: # if only query is "id," then it is OK
             return False
         return True
 
@@ -248,7 +248,7 @@ def is_redundant_trap_url(parsed):
         if any(k.lower() in bad for k in qs.keys()):
             return True
 
-    # Timeline traps
+    # Timeline traps; often leads to infinite scrolling due to "from="
     if "timeline" in path and "from=" in query:
         return True
 
@@ -362,5 +362,6 @@ def is_valid(url):
 
     except TypeError:
         return False
+
 
 
