@@ -33,7 +33,7 @@ ALLOWED_DOMAINS = {
 STOPWORDS = load_stopwords()
 
 # -----------------------------
-# Logging
+# Logging (for testing)
 # -----------------------------
 logger = logging.getLogger("crawler")
 if not logger.handlers:
@@ -52,7 +52,7 @@ if not logger.handlers:
 # -----------------------------
 # Analytics (shared state)
 # -----------------------------
-analytics = load_analytics()
+analytics = load_analytics() # Loads "analytics.json" from before.
 
 UNIQUE_PAGES = set(analytics.get("unique_pages", []))
 WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {}))
@@ -62,7 +62,7 @@ SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {}))
 NEAR_DUPLICATES = analytics.get("near_duplicates", [])
 
 # Thread-safety for all shared analytics/similarity state
-ANALYTICS_LOCK = threading.Lock()
+ANALYTICS_LOCK = threading.Lock() # Prevent other threads from modifying.
 
 # ============================================================
 # SCRAPER
