@@ -33,7 +33,7 @@ ALLOWED_DOMAINS = {
 STOPWORDS = load_stopwords()
 
 # -----------------------------
-# Logging (for testing)
+# Logging: FOR TESTING PURPOSES
 # -----------------------------
 logger = logging.getLogger("crawler")
 if not logger.handlers:
@@ -54,14 +54,14 @@ if not logger.handlers:
 # -----------------------------
 analytics = load_analytics() # Loads "analytics.json" from before.
 
-UNIQUE_PAGES = set(analytics.get("unique_pages", []))
-WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {}))
-LONGEST_PAGE = tuple(analytics.get("longest_page", ["", 0]))
-SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {}))
+UNIQUE_PAGES = set(analytics.get("unique_pages", [])) # No duplicates (as opposed to list) -> comparing members
+WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {})) # Word, Frequency; requires 2 variables
+LONGEST_PAGE = tuple(analytics.get("longest_page", ["", 0])) # URL, Word Count; fixed pair that shows URL's longest page
+SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {})) # Subdomains, Frequency; requires 2 variables
 # FINGERPRINTS = {k: set(v) for k, v in analytics["fingerprints"].items()}
-NEAR_DUPLICATES = analytics.get("near_duplicates", [])
+NEAR_DUPLICATES = analytics.get("near_duplicates", []) # No duplicates (as opposed to list)
 
-# Thread-safety for all shared analytics/similarity state
+# Thread-safety for all shared analytics/similarity state 
 ANALYTICS_LOCK = threading.Lock() # Prevent other threads from modifying.
 
 # ============================================================
@@ -72,41 +72,41 @@ def scraper(url, resp):
     
     # Process successful HTTP responses
     if resp.status != 200 or resp.raw_response is None:
-        return []
+        return [] # exit function early
     # Skip URLs that fail 
     if not is_valid(url):
         logger.info(f"Skip invalid URL (trap): {url}")
-        return []
+        return [] # exit function early
 
     logger.info(f"Processing: {url}")
     
      # Avoid non-HTML resources
     try:
-        content_type = resp.raw_response.headers.get("Content-Type", "").lower()
+        content_type = resp.raw_response.headers.get("Content-Type", "").lower() # Gathers the content-type from HTTP header
     except Exception:
         content_type = ""
         
     # Skip PDFs, images, etc.
-    if "text/html" not in content_type:
+    if "text/html" not in content_type: # If file lacks any text or HTML in content-type
         logger.info(f"Skip non-HTML ({content_type}): {url}")
-        return []
+        return [] # Then return early
 
     # Extract outgoing links from the page
     links = extract_next_links(url, resp)
 
     try:
         # Parse page content and extract visible text
-        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
-        text = soup.get_text(separator=" ")
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Extracts data from HTML into a more readable format
+        text = soup.get_text(separator=" ") # Replaces HTML tags with blankspace; ex. <p>Hello<b>world</b>!</p> -> Helloworld -> Hello World
 
         # Tokenize text
-        tokens = tokenize(text, STOPWORDS)
+        tokens = tokenize(text, STOPWORDS) # Using RegEx
 
         # Normalize by removing fragment
-        normalized_url, _ = urldefrag(url)
+        normalized_url, _ = urldefrag(url) # normalized_url = defragmented URL; _ = fragment
 
         # Update analytics
-        with ANALYTICS_LOCK:
+        with ANALYTICS_LOCK: # Ensures only one thread running
             # -----------------------------
             # Unique pages
             # -----------------------------
@@ -133,11 +133,11 @@ def scraper(url, resp):
             # Subdomain counts
             # -----------------------------
             if is_new:
-                domain = urlparse(normalized_url).netloc.lower()
+                domain = urlparse(normalized_url).netloc.lower() # netloc = domain, subdomain, port, credentials of URL 
                 if domain.startswith("www."):
-                    domain = domain[4:]
-                if domain.endswith(".uci.edu"):
-                    SUBDOMAIN_COUNTS[domain] += 1
+                    domain = domain[4:] # Starts after the www. which is 4 chars long
+                if domain.endswith(".uci.edu"): # Ensures that crawler doesn't go beyond UCI websites
+                    SUBDOMAIN_COUNTS[domain] += 1 
 
             # -----------------------------
             # Extra Credit Similarity (n-gram fingerprinting)
@@ -149,12 +149,12 @@ def scraper(url, resp):
             for other_url, other_fp in FINGERPRINTS.items():
                 if other_url == normalized_url:
                     continue
-                sim = jaccard_similarity(fingerprints, other_fp)
+                sim = jaccard_similarity(fingerprints, other_fp) # SimilarityAB = jaccard(FingerprintA AND FingerprintB) / jaccard(FingerprintA OR FingerprintB)
                 if sim > 0.90:
                     NEAR_DUPLICATES.append((normalized_url, other_url, sim))
 
             # -----------------------------
-            # Persist analytics
+            # Updated analytics
             # -----------------------------
             analytics["unique_pages"] = list(UNIQUE_PAGES)
             analytics["word_counts"] = dict(WORD_COUNTS)
@@ -171,7 +171,7 @@ def scraper(url, resp):
     # Defragment and validate outgoing links
     cleaned = []
     for link in links:
-        link, _ = urldefrag(link)
+        link, _ = urldefrag(link) # normalized_url = defragmented URL; _ = fragment
         if is_valid(link):
             cleaned.append(link)
 
@@ -196,12 +196,15 @@ def extract_next_links(url, resp):
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
 
         # Find all anchor tags that contain an href attribute
-        for tag in soup.find_all("a", href=True):
+        for tag in soup.find_all("a", href=True): # <a> is hyperlink & href (hypertext reference) is a link to other pages, so that they can be added to frontier
             href = tag.get("href")
 
             # Convert relative URLs to absolute URLs
-            abs_url = urljoin(url, href)
-            
+            abs_url = urljoin(url, href) # Ensures that all URLs show the complete path to their resource
+            """ Example:
+            Relative URL: "../about"
+            Absolute URL: "https://example.com/" + "../about" = https://example.com/about"
+            """
             # Remove fragment identifiers
             abs_url, _ = urldefrag(abs_url)
 
@@ -222,21 +225,21 @@ def is_redundant_trap_url(parsed):
     query = parsed.query.lower()
     qs = parse_qs(parsed.query, keep_blank_values=True) # Stores a list of values from parsed URL, and ensures all parameters are preserved
 
-    # WICS / NGS; WICS specifically leads to an infinite calendar trap
-    if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL
+    # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog, both are low info
+    if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL, the domain/subdomain/port/credentials
         return True
 
-    # DokuWiki
+    # DokuWiki; Wiki leads to lots of redundant links and low info pages
     if "doku.php" in path:
-        if not qs:
+        if not qs: # If it has no query parameters
             return False
         if set(k.lower() for k in qs.keys()) <= {"id"}: # if only query is "id," then it is OK
             return False
         return True
 
-    # MediaWiki
-    if path.endswith("index.php") and "title=" in query:
-        allowed = {"title", "oldid"}
+    # MediaWiki; Wiki leads to lots of redundant links and low info pages
+    if path.endswith("index.php") and "title=" in query: # Pages with these parameters were specifically low info & too numerous
+        allowed = {"title", "oldid"} # Parameters that pages of interest had
         if set(k.lower() for k in qs.keys()) <= allowed:
             return False
         return True
@@ -252,7 +255,7 @@ def is_redundant_trap_url(parsed):
     if "timeline" in path and "from=" in query:
         return True
 
-    # Tuple of UI parameters
+    # Tuple of UI parameters to avoid
     generic_bad = (
         "tab=",
         "sort=",
@@ -267,7 +270,7 @@ def is_redundant_trap_url(parsed):
     if any(k in query for k in generic_bad) and query.count("&") >= 3:
         return True
     
-    if len(query) > 200:
+    if len(query) > 200: # Based on textbook suggestions
         return True
 
     # If none of the above trap detectors activate...
@@ -284,7 +287,7 @@ def is_valid(url):
         if parsed.scheme not in {"http", "https"}:
             return False
 
-        domain = parsed.netloc.lower()
+        domain = parsed.netloc.lower() # netloc = domain, subdomain, port, credentials of URL 
 
         # Strips port if it is present
         domain = domain.split(":", 1)[0]
@@ -294,13 +297,13 @@ def is_valid(url):
             domain = domain[4:]
 
         # Hardcoded: Blocks domains with "intranet" and "gitlab"; Deemed irrelevant as it overloads sites with low information URLs & info
-        if domain == "intranet.ics.uci.edu":
+        if domain == "intranet.ics.uci.edu": # Had a lot of pages + required UCI VPN access
             return False
 
-        if domain == "gitlab.ics.uci.edu" or domain.endswith(".gitlab.ics.uci.edu"):
+        if domain == "gitlab.ics.uci.edu" or domain.endswith(".gitlab.ics.uci.edu"): # Had a page for every commit made
             return False
 
-        # Domain boundary check
+        # Domain boundary check: to avoid physics.uci.edu
         def allowed_domain(d: str) -> bool:
             # Checks if domain is one of the 4 domains being looked for
             return any(d == a or d.endswith("." + a) for a in ALLOWED_DOMAINS)
@@ -328,7 +331,7 @@ def is_valid(url):
         ):
             return False
 
-        # WordPress libraries
+        # WordPress libraries; Archives overloaded with too many irrelevant pages
         if "/wp-content/" in path:
             return False
 
@@ -339,14 +342,15 @@ def is_valid(url):
         if any(x in query for x in ["ical", "outlook"]):
             return False
 
-        # Date archives
+        # Dates; Date patterns common in logs & archives that want to be avoided
         if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
             return False
 
+        # Page parameter whose number is greater than 100 should be avoided; pagination = number of branches/"nexts" to other pages
         if "paged" in q and any(v.isdigit() and int(v) >= 100 for v in q.get("paged", [])):
             return False
 
-        # Query explosion
+        # Query explosion; too many characters in query with more than 6 ampersands; from textbook
         if len(query) > 120 or query.count("&") > 6:
             return False
 
@@ -362,6 +366,8 @@ def is_valid(url):
 
     except TypeError:
         return False
+
+
 
 
 
