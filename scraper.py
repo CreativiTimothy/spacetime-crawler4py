@@ -33,7 +33,7 @@ ALLOWED_DOMAINS = {
 STOPWORDS = load_stopwords()
 
 # -----------------------------
-# Logging
+# Logging: FOR TESTING PURPOSES
 # -----------------------------
 logger = logging.getLogger("crawler")
 if not logger.handlers:
@@ -362,6 +362,7 @@ def is_valid(url):
 
     except TypeError:
         return False
+
 
 
 
