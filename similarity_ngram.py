@@ -44,9 +44,11 @@ def select_fingerprints(ngrams, p=P_MOD):
 
 def jaccard_similarity(set1, set2):
     """Compute Jaccard similarity between two fingerprint sets."""
+    # Similarity = jaccard(FingerprintA AND FingerprintB) / jaccard(FingerprintA OR FingerprintB)
     if not set1 or not set2:
         return 0.0
     inter = len(set1 & set2)
     union = len(set1 | set2)
     return inter / union
+
 
