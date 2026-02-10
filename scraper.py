@@ -222,9 +222,6 @@ def extract_next_links(url, resp):
     return output_links
 
 
-# ============================================================
-# TRAP DETECTION
-# ============================================================
 def is_redundant_trap_url(parsed):
     """
     Check for traps that have redundant information.
@@ -246,6 +243,27 @@ def is_redundant_trap_url(parsed):
 
     # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog; both are low info
     if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL, the domain/subdomain/port/credentials
+        return True
+
+    # Calendar detection to avoid infinite loops
+    if any(x in path for x in ["/events", "/calendar"]):
+        return True
+
+    if any(x in query for x in ["ical", "outlook"]):
+        return True
+
+    # Dates; Date patterns common in logs & archives that want to be avoided
+    if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
+        return True
+
+    # Page parameter whose number is greater than 100 should be avoided
+    # Pagination = number of branches/"next"s to other pages
+    if "paged" in qs and any(v.isdigit() and int(v) >= 100 for v in qs.get("paged", [])):
+        return True
+
+    # Deep pagination
+    # Pagination = number of branches/"next"s to other pages
+    if re.search(r"(page|start)=\d{3,}", query):
         return True
 
     # DokuWiki; Wiki leads to lots of redundant links and low info pages
@@ -365,30 +383,9 @@ def is_valid(url):
         if "/wp-content/" in path:
             return False
 
-        # Calendar detection to avoid infinite loops
-        if any(x in path for x in ["/events", "/calendar"]):
-            return False
-
-        if any(x in query for x in ["ical", "outlook"]):
-            return False
-
-        # Dates; Date patterns common in logs & archives that want to be avoided
-        if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
-            return False
-
-        # Page parameter whose number is greater than 100 should be avoided
-        # Pagination = number of branches/"next"s to other pages
-        if "paged" in qs and any(v.isdigit() and int(v) >= 100 for v in qs.get("paged", [])):
-            return False
-
         # Query explosion; too many characters in query with more than 6 ampersands; from textbook
         # 6 "&" (7 parameters) may suggest dynamically generated pages, tracking URLs, infinite filtering combinations, or session-based traps.
         if len(query) > 120 or query.count("&") > 6:
-            return False
-
-        # Deep pagination
-        # Pagination = number of branches/"next"s to other pages
-        if re.search(r"(page|start)=\d{3,}", query):
             return False
 
         # Deep path
@@ -399,8 +396,3 @@ def is_valid(url):
 
     except TypeError:
         return False
-
-
-
-
-
