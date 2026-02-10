@@ -9,6 +9,10 @@ import os
 ANALYTICS_FILE = "analytics.json"
 
 def load_analytics():
+    """
+    Load previous analytics from previous crawl that paused/stopped (from ANALYTICS_FILE).
+    If no ANALYTICS_FILE, start fresh.
+    """
     if not os.path.exists(ANALYTICS_FILE):
         return {
             "unique_pages": [],
@@ -22,5 +26,8 @@ def load_analytics():
         return json.load(f)
 
 def save_analytics(data):
+    """
+    Save runtime analytics to ANALYTICS_FILE.
+    """
     with open(ANALYTICS_FILE, "w") as f:
         json.dump(data, f, indent=2)
