@@ -16,16 +16,16 @@ NEAR_DUPLICATES = []    # (url1, url2, similarity)
 
 def hash_ngram(ngram):
     """Hash an n-gram into a 64-bit integer."""
-    h = hashlib.sha1(ngram.encode("utf-8")).hexdigest()
-    return int(h, 16) & ((1 << 64) - 1)
+    h = hashlib.sha1(ngram.encode("utf-8")).hexdigest() # Use SHA-1 hashing with UTF-8 encoding, returning hexadecimal string representation.
+    return int(h, 16) & ((1 << 64) - 1) # Convert h to integer and keep lowest 64 bits.
 
 
 def make_ngrams(tokens, n=N_GRAM):
     """Generate overlapping n-grams from tokens."""
     grams = []
-    for i in range(len(tokens) - n + 1):
+    for i in range(len(tokens) - n + 1): # For each n-gram in number of valid n-grams
         # Find overlap by taking the token before and the token after 
-        grams.append(" ".join(tokens[i:i+n]))
+        grams.append(" ".join(tokens[i:i+n])) # Join together (with a space) consecutive n-grams.
     return grams
 
 
@@ -37,19 +37,18 @@ def select_fingerprints(ngrams, p=P_MOD):
     selected = set()
     for ng in ngrams:
         h = hash_ngram(ng)
-        if h % p == 0:
+        if h % p == 0: # "0 mod p" rule to select only some hashes (acts as sampling filter).
             selected.add(h)
     return selected
 
 
 def jaccard_similarity(set1, set2):
     """Compute Jaccard similarity between two fingerprint sets."""
-    # SimilarityAB = jaccard(FingerprintA AND FingerprintB) / jaccard(FingerprintA OR FingerprintB)
-    if not set1 or not set2:
-        return 0.0
-    inter = len(set1 & set2)
-    union = len(set1 | set2)
-    return inter / union
+    if not set1 or not set2: # At least one set of fingerprints is empty. Skip.
+        return 0.0 # "0.0" = no similarity. "1.0" = identical.
+    inter = len(set1 & set2) # Number of intersecting sets of fingerprints.
+    union = len(set1 | set2) # Number of union sets of fingerprints.
+    return inter / union # SimilarityAB = jaccard(FingerprintA AND FingerprintB) / jaccard(FingerprintA OR FingerprintB)
 
 
 
