@@ -54,12 +54,12 @@ if not logger.handlers:
 # -----------------------------
 analytics = load_analytics() # Loads "analytics.json" from before.
 
-UNIQUE_PAGES = set(analytics.get("unique_pages", [])) # No duplicates (as opposed to list) -> comparing members
-WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {})) # Word, Frequency; requires 2 variables
-LONGEST_PAGE = tuple(analytics.get("longest_page", ["", 0])) # URL, Word Count; fixed pair that shows URL's longest page
-SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {})) # Subdomains, Frequency; requires 2 variables
+UNIQUE_PAGES = set(analytics.get("unique_pages", [])) # No duplicates (set as opposed to list) -> comparing members, O(1) check.
+WORD_COUNTS = defaultdict(int, analytics.get("word_counts", {})) # [Word, Frequency]; requires 2 variables
+LONGEST_PAGE = tuple(analytics.get("longest_page", ["", 0])) # [URL, Word Count]; fixed pair that shows URL's longest page (tuples are immutatable)
+SUBDOMAIN_COUNTS = defaultdict(int, analytics.get("subdomains", {})) # [Subdomain, Frequency]; requires 2 variables
 # FINGERPRINTS = {k: set(v) for k, v in analytics["fingerprints"].items()}
-NEAR_DUPLICATES = analytics.get("near_duplicates", []) # No duplicates (as opposed to list)
+NEAR_DUPLICATES = analytics.get("near_duplicates", []) # List: Preserve order while appending near duplicates.
 
 # Thread-safety for all shared analytics/similarity state 
 ANALYTICS_LOCK = threading.Lock() # Prevent other threads from modifying.
@@ -82,13 +82,16 @@ def scraper(url, resp):
     
      # Avoid non-HTML resources
     try:
+        # "content_type" = MIME type returned by the server (e.g., "text/html", "application/pdf", "image/png").
+        # "MIME" = Multipurpose Internet Mail Extensions.
         content_type = resp.raw_response.headers.get("Content-Type", "").lower() # Gathers the content-type from HTTP header
     except Exception:
         content_type = ""
         
-    # Skip PDFs, images, etc.
-    if "text/html" not in content_type: # If file lacks any text or HTML in content-type
-        logger.info(f"Skip non-HTML ({content_type}): {url}")
+    # Skip non-HTML (PDFs, images, etc.)
+    if "text/html" not in content_type: # If page lacks any HTML.
+        # "text/html" = HTML page.
+        logger.info(f"Skip non-HTML ({content_type}): {url}") # Page is not HTML.
         return [] # Then return early
 
     # Extract outgoing links from the page
@@ -96,11 +99,11 @@ def scraper(url, resp):
 
     try:
         # Parse page content and extract visible text
-        soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Extracts data from HTML into a more readable format
-        text = soup.get_text(separator=" ") # Replaces HTML tags with blankspace; ex. <p>Hello<b>world</b>!</p> -> Helloworld -> Hello World
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Extracts data from HTML into a more readable/structured format
+        text = soup.get_text(separator=" ") # Replaces HTML tags with blankspace; ex. <p>Hello<b>world</b>!</p> -> Hello world (instead of "Helloworld")
 
         # Tokenize text
-        tokens = tokenize(text, STOPWORDS) # Using RegEx
+        tokens = tokenize(text, STOPWORDS) # Using RegEx to replace nonalphanumeric characters with spaces.
 
         # Normalize by removing fragment
         normalized_url, _ = urldefrag(url) # normalized_url = defragmented URL; _ = fragment
@@ -135,7 +138,7 @@ def scraper(url, resp):
             if is_new:
                 domain = urlparse(normalized_url).netloc.lower() # netloc = domain, subdomain, port, credentials of URL 
                 if domain.startswith("www."):
-                    domain = domain[4:] # Starts after the www. which is 4 chars long
+                    domain = domain[4:] # Starts after the "www." which is 4 chars long
                 if domain.endswith(".uci.edu"): # Ensures that crawler doesn't go beyond UCI websites
                     SUBDOMAIN_COUNTS[domain] += 1 
 
@@ -143,18 +146,18 @@ def scraper(url, resp):
             # Extra Credit Similarity (n-gram fingerprinting)
             # -----------------------------
             ngrams = make_ngrams(tokens)
-            fingerprints = select_fingerprints(ngrams)
+            fingerprints = select_fingerprints(ngrams) # "0 mod p" rule to select only some hashes (acts as sampling filter).
             FINGERPRINTS[normalized_url] = fingerprints
 
-            for other_url, other_fp in FINGERPRINTS.items():
-                if other_url == normalized_url:
+            for other_url, other_fp in FINGERPRINTS.items(): # Compare current URL to all previously stored URLs.
+                if other_url == normalized_url: # Prevent comparing page to itself (two defragmented URLs may be the same URL but with different fragments).
                     continue
                 sim = jaccard_similarity(fingerprints, other_fp) # SimilarityAB = jaccard(FingerprintA AND FingerprintB) / jaccard(FingerprintA OR FingerprintB)
-                if sim > 0.90:
+                if sim > 0.90: # Very similar except for some small details.
                     NEAR_DUPLICATES.append((normalized_url, other_url, sim))
 
             # -----------------------------
-            # Updated analytics
+            # Update analytics
             # -----------------------------
             analytics["unique_pages"] = list(UNIQUE_PAGES)
             analytics["word_counts"] = dict(WORD_COUNTS)
@@ -163,7 +166,7 @@ def scraper(url, resp):
             # analytics["fingerprints"] = {k: list(v) for k, v in FINGERPRINTS.items()}
             analytics["near_duplicates"] = NEAR_DUPLICATES
 
-            save_analytics(analytics)
+            save_analytics(analytics) # Save analytics to file each run to prevent runtime loss.
 
     except Exception as e:
         logger.info(f"Error analyzing {url}: {e}")
@@ -193,20 +196,22 @@ def extract_next_links(url, resp):
 
     try:
         # Parse raw HTML content
-        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Extracts data from HTML into a more readable/structured format
 
-        # Find all anchor tags that contain an href attribute
-        for tag in soup.find_all("a", href=True): # <a> is hyperlink & href (hypertext reference) is a link to other pages, so that they can be added to frontier
+        # Find all anchor tags that contain an href attribute (outgoing links to add to frontier)
+        for tag in soup.find_all("a", href=True): # <a> is hyperlink & href (hypertext reference) is a link to other pages.
             href = tag.get("href")
 
             # Convert relative URLs to absolute URLs
             abs_url = urljoin(url, href) # Ensures that all URLs show the complete path to their resource
-            """ Example:
+            """
+            Example:
             Relative URL: "../about"
             Absolute URL: "https://example.com/" + "../about" = https://example.com/about"
             """
+
             # Remove fragment identifiers
-            abs_url, _ = urldefrag(abs_url)
+            abs_url, _ = urldefrag(abs_url) # abs_url = defragmented URL; _ = fragment
 
             # Store extracted URL
             output_links.append(abs_url)
@@ -221,26 +226,40 @@ def extract_next_links(url, resp):
 # TRAP DETECTION
 # ============================================================
 def is_redundant_trap_url(parsed):
+    """
+    Check for traps that have redundant information.
+    (i.e. very similar information)
+    (e.g. different sorted order or versions)
+    """
     path = parsed.path.lower()
     query = parsed.query.lower()
-    qs = parse_qs(parsed.query, keep_blank_values=True) # Stores a list of values from parsed URL, and ensures all parameters are preserved
 
-    # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog, both are low info
+    """
+    Convert query string into a dictionary of lists
+    Handles:
+    - Repeated parameters (a=1&a=2)
+    - URL-encoded characters (e.g. " " = "%20" [spaces not allowed in URLS], "?" = "%3F", etc.)
+    - Ordering differences (a=1&b=2 vs. b=2&a=1)
+    "keep_blank_values=True": Empty parameters like "b=" are preserved.
+    """
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+
+    # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog; both are low info
     if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL, the domain/subdomain/port/credentials
         return True
 
     # DokuWiki; Wiki leads to lots of redundant links and low info pages
     if "doku.php" in path:
         if not qs: # If it has no query parameters
-            return False
-        if set(k.lower() for k in qs.keys()) <= {"id"}: # if only query is "id," then it is OK
+            return False # No queries? No problem
+        if set(k.lower() for k in qs.keys()) <= {"id"}: # if only query is "id", then it is OK ("set <=" means "subset of")
             return False
         return True
 
     # MediaWiki; Wiki leads to lots of redundant links and low info pages
     if path.endswith("index.php") and "title=" in query: # Pages with these parameters were specifically low info & too numerous
         allowed = {"title", "oldid"} # Parameters that pages of interest had
-        if set(k.lower() for k in qs.keys()) <= allowed:
+        if set(k.lower() for k in qs.keys()) <= allowed: # "<=" = subset of allowed.
             return False
         return True
 
@@ -248,7 +267,7 @@ def is_redundant_trap_url(parsed):
     if "/wiki" in path:
         # Set of all keywords that want to be avoided under domains with "/wiki"
         bad = {"version", "format", "action", "from", "precision", "diff"}
-        if any(k.lower() in bad for k in qs.keys()):
+        if any(k.lower() in bad for k in qs.keys()): # Check if any keys (parameters) are any of "bad".
             return True
 
     # Timeline traps; often leads to infinite scrolling due to "from="
@@ -267,9 +286,11 @@ def is_redundant_trap_url(parsed):
     )
 
     # If query contains any of the UI parameters and more than 3 ampersands, which separates parameters...
+    # 3 "&" (4 parameters) may suggest dynamically generated pages, tracking URLs, infinite filtering combinations, or session-based traps.
     if any(k in query for k in generic_bad) and query.count("&") >= 3:
         return True
-    
+
+    # Query too long.
     if len(query) > 200: # Based on textbook suggestions
         return True
 
@@ -315,12 +336,21 @@ def is_valid(url):
         if parsed.path.startswith("/~eppstein/pix"):
             return False
 
-        if is_redundant_trap_url(parsed):
+        if is_redundant_trap_url(parsed): # Check for traps that have redundant information.
             return False
 
         path = parsed.path.lower()
         query = parsed.query.lower()
-        q = parse_qs(parsed.query)
+
+        """
+        Convert query string into a dictionary of lists
+        Handles:
+        - Repeated parameters (a=1&a=2)
+        - URL-encoded characters (e.g. " " = "%20" [spaces not allowed in URLS], "?" = "%3F", etc.)
+        - Ordering differences (a=1&b=2 vs. b=2&a=1)
+        "keep_blank_values=True": Empty parameters like "b=" are preserved.
+        """
+        qs = parse_qs(parsed.query)
 
         # File extensions
         if re.match(
@@ -346,15 +376,18 @@ def is_valid(url):
         if re.search(r"^/(19|20)\d{2}/\d{1,2}/page/\d+(/|$)", path):
             return False
 
-        # Page parameter whose number is greater than 100 should be avoided; pagination = number of branches/"nexts" to other pages
-        if "paged" in q and any(v.isdigit() and int(v) >= 100 for v in q.get("paged", [])):
+        # Page parameter whose number is greater than 100 should be avoided
+        # Pagination = number of branches/"next"s to other pages
+        if "paged" in qs and any(v.isdigit() and int(v) >= 100 for v in qs.get("paged", [])):
             return False
 
         # Query explosion; too many characters in query with more than 6 ampersands; from textbook
+        # 6 "&" (7 parameters) may suggest dynamically generated pages, tracking URLs, infinite filtering combinations, or session-based traps.
         if len(query) > 120 or query.count("&") > 6:
             return False
 
         # Deep pagination
+        # Pagination = number of branches/"next"s to other pages
         if re.search(r"(page|start)=\d{3,}", query):
             return False
 
