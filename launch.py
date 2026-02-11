@@ -9,7 +9,7 @@ Mac Compatibility [Begin]
 import sys
 import multiprocessing
 
-if sys.platform == "darwin":
+if sys.platform == "darwin": # "darwin" = MAC OS
     multiprocessing.set_start_method("fork")
 """
 Mac Compatibility [End]
@@ -24,7 +24,7 @@ from crawler import Crawler
 
 from analytics_store import load_analytics
 
-analytics = load_analytics()
+analytics = load_analytics() # Loads "analytics.json" from before.
 
 def main(config_file, restart):
     cparser = ConfigParser()
