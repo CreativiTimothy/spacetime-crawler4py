@@ -241,7 +241,7 @@ def is_redundant_trap_url(parsed):
     """
     qs = parse_qs(parsed.query, keep_blank_values=True)
 
-    # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog; both are low info
+    # WICS / NGS; WICS specifically leads to an infinite calendar trap & NGS is a blog; both are low info. NGS has pages > 10 years old.
     if "wics" in parsed.netloc or "ngs" in parsed.netloc: # netloc = Network Location of the parsed URL, the domain/subdomain/port/credentials
         return True
 
@@ -396,3 +396,4 @@ def is_valid(url):
 
     except TypeError:
         return False
+
